@@ -3,30 +3,328 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Exho games</title>
-    <link rel="stylesheet" href="style.css">
+    <title>World of Words</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .stats {
+            background-color: #e9f7ef;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.2em;
+        }
+        .input-area {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        #wordInput {
+            flex-grow: 1;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 5px 0 0 5px;
+        }
+        #submitBtn {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 0 5px 5px 0;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #submitBtn:hover {
+            background-color: #45a049;
+        }
+        #submitBtn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .word-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .word-item {
+            background-color: #e1f5fe;
+            padding: 8px 12px;
+            border-radius: 20px;
+        }
+        .progress-container {
+            width: 100%;
+            background-color: #ddd;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .progress-bar {
+            height: 30px;
+            background-color: #4CAF50;
+            border-radius: 5px;
+            text-align: center;
+            line-height: 30px;
+            color: white;
+            transition: width 0.3s;
+        }
+        .text-area {
+            width: 100%;
+            min-height: 100px;
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,0,0,.3);
+            border-radius: 50%;
+            border-top-color: #000;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
-    <header>
-        <h1>Exho games ᵐᵃᵈᵉ ᵇʸ ᵇᵉᶻᵒ</h1>
-        <nav>
-            <ul>
-                <li><a href="#action">Action</a></li>
-                <li><a href="#puzzle">Puzzle</a></li>
-                <li><a href="#adventure">Adventure</a></li>
-            </ul>
-        </nav>
-    </header>
+    <div class="container">
+        <h1>World of Words</h1>
+        
+        <div class="stats">
+            <div id="wordCount">Unique words count: 0</div>
+            <div id="wordPercentage">Words collected: 0% of all words in the world</div>
+        </div>
+        
+        <div class="progress-container">
+            <div id="progressBar" class="progress-bar" style="width: 0%">0%</div>
+        </div>
+        
+        <div class="input-area">
+            <input type="text" id="wordInput" placeholder="Enter a word..." autocomplete="off">
+            <button id="submitBtn">Verify and add</button>
+        </div>
+        
+        <div id="statusMessage" style="margin-bottom: 20px; text-align: center;"></div>
+        
+        <textarea class="text-area" id="textInput" placeholder="You can also enter entire text..."></textarea>
+        <button id="submitTextBtn" style="width: 100%; padding: 10px; margin-top: 10px;">Process text</button>
+        
+        <h2>Your words:</h2>
+        <div class="word-list" id="wordList"></div>
+    </div>
 
-    <main id="game-list">
-        <!-- Games will be dynamically listed here -->
-    </main>
-	
-	 <section id="embedded-game-container" style="display: none;">
-        <button onclick="closeEmbeddedGame()">Close Game</button>
-        <iframe id="embedded-game" width="600" height="400" frameborder="0"></iframe>
-    </section>
-
-    <script src="script.js"></script>
+    <script>
+        // Configuration
+        const TOTAL_WORDS_IN_WORLD = 1000000;
+        const SIMULATE_API_DELAY = 1500;
+        
+        // App state
+        let words = new Set();
+        let isCheckingWord = false;
+        
+        // DOM elements
+        const elements = {
+            wordInput: document.getElementById('wordInput'),
+            submitBtn: document.getElementById('submitBtn'),
+            wordList: document.getElementById('wordList'),
+            wordCount: document.getElementById('wordCount'),
+            wordPercentage: document.getElementById('wordPercentage'),
+            progressBar: document.getElementById('progressBar'),
+            textInput: document.getElementById('textInput'),
+            submitTextBtn: document.getElementById('submitTextBtn'),
+            statusMessage: document.getElementById('statusMessage')
+        };
+        
+        // Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            loadWords();
+            updateDisplay();
+            
+            elements.submitBtn.addEventListener('click', addWord);
+            elements.wordInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !isCheckingWord) addWord();
+            });
+            
+            elements.submitTextBtn.addEventListener('click', processText);
+        });
+        
+        // Data storage
+        function loadWords() {
+            try {
+                const savedWords = localStorage.getItem('validWordsCollection');
+                if (savedWords) {
+                    words = new Set(JSON.parse(savedWords));
+                }
+            } catch (e) {
+                console.error("Error reading from LocalStorage:", e);
+            }
+        }
+        
+        function saveWords() {
+            try {
+                localStorage.setItem('validWordsCollection', JSON.stringify([...words]));
+            } catch (e) {
+                console.error("Error saving to LocalStorage:", e);
+            }
+        }
+        
+        // Main functions
+        async function addWord() {
+            if (isCheckingWord) return;
+            
+            const word = elements.wordInput.value.trim();
+            if (!word) return;
+            
+            if (!isValidWordFormat(word)) {
+                showStatus("Invalid word format!", "error");
+                return;
+            }
+            
+            isCheckingWord = true;
+            elements.submitBtn.disabled = true;
+            elements.submitBtn.innerHTML = 'Checking <span class="loading"></span>';
+            
+            try {
+                const isValid = await checkWordWithDeepSeek(word);
+                
+                if (isValid) {
+                    words.add(word.toLowerCase());
+                    saveWords();
+                    updateDisplay();
+                    elements.wordInput.value = '';
+                    showStatus("Word '" + word + "' was added!", "success");
+                } else {
+                    showStatus("'" + word + "' is not a valid word or not recognized.", "error");
+                }
+            } catch (error) {
+                console.error("Error verifying word:", error);
+                showStatus("Error verifying word. Please try again.", "error");
+            } finally {
+                isCheckingWord = false;
+                elements.submitBtn.disabled = false;
+                elements.submitBtn.textContent = 'Verify and add';
+            }
+        }
+        
+        async function processText() {
+            const text = elements.textInput.value.trim();
+            if (!text) return;
+            
+            const textWords = text.split(/\s+/);
+            let validWords = [];
+            let checkedWords = 0;
+            
+            for (const word of textWords) {
+                const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '').toLowerCase();
+                if (cleanWord.length > 1 && !words.has(cleanWord)) {
+                    try {
+                        const isValid = await checkWordWithDeepSeek(cleanWord);
+                        if (isValid) {
+                            validWords.push(cleanWord);
+                        }
+                    } catch (error) {
+                        console.error("Error verifying word:", error);
+                    }
+                    checkedWords++;
+                    updateTextProgress(checkedWords, textWords.length);
+                }
+            }
+            
+            if (validWords.length > 0) {
+                validWords.forEach(word => words.add(word));
+                saveWords();
+                updateDisplay();
+                showStatus("Added " + validWords.length + " new words from text!", "success");
+            } else {
+                showStatus("No new valid words found in the text.", "info");
+            }
+            
+            elements.textInput.value = '';
+            document.getElementById('textProgress').remove();
+        }
+        
+        // Helper functions
+        function isValidWordFormat(word) {
+            return word.length >= 2 && /[a-zA-ZčšžČŠŽ]/.test(word);
+        }
+        
+        async function checkWordWithDeepSeek(word) {
+            // API CALL SIMULATION
+            await new Promise(resolve => setTimeout(resolve, SIMULATE_API_DELAY));
+            
+            const invalidPatterns = [
+                /\d/,
+                /^[^a-zA-ZčšžČŠŽ]+$/,
+                /(.)\1{2,}/,
+                /[^a-zA-ZčšžČŠŽ\s]/,
+            ];
+            
+            if (invalidPatterns.some(pattern => pattern.test(word))) {
+                return false;
+            }
+            
+            return true;
+        }
+        
+        function updateTextProgress(current, total) {
+            let progressElement = document.getElementById('textProgress');
+            if (!progressElement) {
+                progressElement = document.createElement('div');
+                progressElement.id = 'textProgress';
+                progressElement.style.margin = '10px 0';
+                elements.statusMessage.after(progressElement);
+            }
+            
+            const percentage = Math.round((current / total) * 100);
+            progressElement.textContent = `Checking words: ${current}/${total} (${percentage}%)`;
+        }
+        
+        function showStatus(message, type) {
+            elements.statusMessage.textContent = message;
+            elements.statusMessage.style.color = type === 'error' ? '#d32f2f' : 
+                                              type === 'success' ? '#388e3c' : '#1976d2';
+        }
+        
+        function updateDisplay() {
+            elements.wordCount.textContent = `Unique words count: ${words.size}`;
+            
+            const percentage = (words.size / TOTAL_WORDS_IN_WORLD * 100).toFixed(6);
+            elements.wordPercentage.textContent = `Words collected: ${percentage}% of all words in the world`;
+            
+            elements.progressBar.style.width = `${Math.min(percentage, 100)}%`;
+            elements.progressBar.textContent = `${percentage}%`;
+            
+            elements.wordList.innerHTML = '';
+            const sortedWords = [...words].sort();
+            
+            sortedWords.forEach(word => {
+                const wordElement = document.createElement('div');
+                wordElement.className = 'word-item';
+                wordElement.textContent = word;
+                elements.wordList.appendChild(wordElement);
+            });
+        }
+    </script>
 </body>
 </html>
